@@ -67,7 +67,7 @@ sequenceDiagram
 *   **문제 정의 (Confused Deputy):** 공격자가 직접 권한이 없는 타겟 시스템(B)에 접근하기 위해, 권한이 있는 대리자 시스템(A)을 교묘하게 조종하여 대신 요청을 보내게 만드는 권한 상승 공격입니다. 예를 들어, 사용자가 '이미지 변환 서비스(A)'를 호출하면서 악의적인 내부 S3 URL을 전달해 '프라이빗 스토리지(B)'의 데이터를 빼돌리는 경우가 이에 해당합니다.
 *   **방어 전략:** Gateway는 단순히 User Token(사용자 권한)이나 Service Identity(mTLS - 서비스 A의 권한) 중 하나만 확인하지 않습니다. 두 신원을 추출해 `SecurityContextExchange`라는 하나의 객체로 **암호학적으로 바인딩(Binding)**합니다. 즉, 정책 엔진은 "서비스 A가 사용자 X의 위임을 받아 서비스 B에 접근하는 행위" 자체를 하나의 Composite Key로 묶어서 평가하므로, 권한 오남용을 원천 차단합니다.
 ### 4.2. Epoll 멀티플렉싱과 Netty Zero-Copy의 심층 이해
-*   **Edge-Triggered Epoll:** 기존의 `select`나 `poll`은 모든 파일 디스크립터(FD)를 순회하며 상태 변화를 확인(O(N))하므로 연결이 많아질수록 성능이 급락합니다. Aegis-Mesh는 리눅스 환경에서 Netty Native Transport를 활용하여 `epoll` 엣지 트리거(Edge-Triggered) 방식을 사용합니다. 이는 상태가 변한 FD만 OS 커널로부터 통보받아 처리(O(1))하므로, C10K 이상의 초고도 동시성 환경에서도 CPU 점유율이 일정하게 유지됩니다.
+*   **Edge-Triggered Epoll:** 기존의 `select`나 `poll`은 모든 파일 디스크립터(FD)를 순회하며 상태 변화를 확인(O(N))하므로 연결이 많아질수록 성능이 급락합니다. PoP-Mesh는 리눅스 환경에서 Netty Native Transport를 활용하여 `epoll` 엣지 트리거(Edge-Triggered) 방식을 사용합니다. 이는 상태가 변한 FD만 OS 커널로부터 통보받아 처리(O(1))하므로, C10K 이상의 초고도 동시성 환경에서도 CPU 점유율이 일정하게 유지됩니다.
 *   **Zero-Copy (`ByteBufAllocator`):** 전통적인 I/O는 네트워크 카드로 데이터를 보내기 위해 OS 커널 버퍼에서 JVM Heap으로 데이터를 복사(Copy)하는 과정을 거칩니다. Netty의 `DirectByteBuf`는 OS 메모리를 직접 참조(Zero-Copy)하여 불필요한 CPU 복사 연산과 가비지 컬렉션(GC) 부하를 극적으로 줄입니다.
 ### 4.3. Zero-Trust Network Architecture (NIST SP 800-207) 완벽 정렬
 *   **Verify Explicitly (명시적 검증):** "내부망에 있으니 안전하다"는 성곽형(Perimeter) 보안 모델을 폐기합니다. 위치나 네트워크 대역에 관계없이 모든 단일 접근 요청은 매번 mTLS 인증서(기기/서비스 인증)와 JWT(사용자 인증)를 통해 명시적으로 검증됩니다.

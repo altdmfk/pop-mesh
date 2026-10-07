@@ -6,7 +6,7 @@ import os
 import statistics
 
 JAVA_EXE = r'C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot\bin\java.exe'
-JAR_PATH = r'build\libs\aegis-gateway-0.0.1-SNAPSHOT.jar'
+JAR_PATH = r'build\libs\pop-gateway-0.0.1-SNAPSHOT.jar'
 K6_EXE = r'.\k6.exe'
 
 def kill_gateway():
@@ -17,7 +17,7 @@ def kill_gateway():
 
 def flush_redis():
     try:
-        subprocess.run(['docker', 'exec', 'aegis-mesh-redis-1', 'redis-cli', 'FLUSHALL'], check=False, stdout=subprocess.DEVNULL)
+        subprocess.run(['docker', 'exec', 'pop-mesh-redis-1', 'redis-cli', 'FLUSHALL'], check=False, stdout=subprocess.DEVNULL)
     except Exception as e:
         print(f'Error flushing redis: {e}', flush=True)
 

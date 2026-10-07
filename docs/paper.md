@@ -4,7 +4,7 @@
 
 ## 국문 요약
 
-본 논문은 제로 트러스트 API 게이트웨이 aegis-mesh를 제안한다. 이 시스템은 외부 인가 서버를 거치지 않고 게이트웨이 프로세스 내부에서 인가 정책 평가를 완료한다.
+본 논문은 제로 트러스트 API 게이트웨이 pop-mesh를 제안한다. 이 시스템은 외부 인가 서버를 거치지 않고 게이트웨이 프로세스 내부에서 인가 정책 평가를 완료한다.
 
 제안 시스템은 세 가지 핵심 설계를 포함한다.
 
@@ -26,7 +26,7 @@ JVM 초기 기동(Cold Start) 구간의 성능도 평가하였다. 초기 기동
 
 ## Abstract
 
-This paper presents the design and implementation of `aegis-mesh`, an in-process Zero-Trust API gateway that completes authorization policy evaluation entirely within the gateway process, without delegating to an external authorization server. The proposed system incorporates three core designs: (1) a dual-identity synthesis mechanism that cryptographically binds an mTLS SPIFFE service identity with a user JWT into a single immutable `SecurityContextExchange` record; (2) a two-tier cache combining in-memory Caffeine (L1) with reactive Redis (L2) to eliminate network hops to external authorization servers; and (3) a Single-Flight pattern that coalesces concurrent stampeding requests upon L1 cache expiry into a single Redis I/O operation.
+This paper presents the design and implementation of `pop-mesh`, an in-process Zero-Trust API gateway that completes authorization policy evaluation entirely within the gateway process, without delegating to an external authorization server. The proposed system incorporates three core designs: (1) a dual-identity synthesis mechanism that cryptographically binds an mTLS SPIFFE service identity with a user JWT into a single immutable `SecurityContextExchange` record; (2) a two-tier cache combining in-memory Caffeine (L1) with reactive Redis (L2) to eliminate network hops to external authorization servers; and (3) a Single-Flight pattern that coalesces concurrent stampeding requests upon L1 cache expiry into a single Redis I/O operation.
 
 Using a k6-based load test with five independent repetitions per scenario, we evaluated the latency-suppression effect of the tiered cache under warmed-up runtime conditions. The L1 cache hit path achieved a median (P50) latency of 5.55 ± 0.61 ms, a P99 of 20.89 ± 5.00 ms, and a maximum latency ranging from 41.02 to 77.35 ms across runs. Compared with the forced L1-cache-miss path (P50 of 7.02 ± 1.43 ms, P99 of 26.89 ± 9.35 ms, and a maximum ranging from 53.35 to 108.05 ms), this indicates a reduction in tail latency.
 
@@ -62,7 +62,7 @@ Finally, structural stability under extreme concurrent load was confirmed across
 
 **표 1.** 기존 사이드카 기반 분리 모델과 제안된 인프로세스 모델의 아키텍처 특성 비교
 
-| 비교 항목 | 기존 사이드카 모델 (Envoy + OPA) | 제안 인프로세스 모델 (`aegis-mesh`) |
+| 비교 항목 | 기존 사이드카 모델 (Envoy + OPA) | 제안 인프로세스 모델 (`pop-mesh`) |
 | :--- | :--- | :--- |
 | **네트워크 홉 (Hop)** | 애플리케이션 $\leftrightarrow$ 프록시 $\leftrightarrow$ 인가 서버 (추가 2-Hop) | 게이트웨이 내부 통합 (추가 Hop 없음) |
 | **메시지 직렬화/역직렬화** | JSON 등 외부 전송용 직렬화 필수 | JVM 내부 객체(불변 레코드) 참조로 직렬화 생략 |
@@ -75,7 +75,7 @@ Finally, structural stability under extreme concurrent load was confirmed across
 
 ### 1.3 연구 기여
 
-본 논문은 상기 한계를 완화하기 위해 인가 정책 평가 전 과정을 게이트웨이 프로세스 내부에서 완결하는 `aegis-mesh`를 설계하고 성능을 평가한다. 본 연구의 주요 기여는 다음 세 가지이다.
+본 논문은 상기 한계를 완화하기 위해 인가 정책 평가 전 과정을 게이트웨이 프로세스 내부에서 완결하는 `pop-mesh`를 설계하고 성능을 평가한다. 본 연구의 주요 기여는 다음 세 가지이다.
 
 1. **인프로세스 이중 신원 합성:** mTLS SPIFFE ID와 사용자 JWT를 단일 불변 레코드로 암호학적으로 바인딩함으로써, Confused Deputy 공격을 아키텍처 수준에서 차단하는 메커니즘을 제안한다.
 2. **계층형 캐시 메커니즘의 소거 검증 및 런타임 수렴 특성 규명:** 외부 사이드카와의 이종 환경 절대 비교 대신, 동일 파이프라인 내에서 L1 캐시 적중 경로, 강제 L1 미스 및 L2 Redis 경로, 고동시성 부하 경로를 단독 실행(Ablation Study)으로 격리 측정한다. 각 경로를 독립 세션에서 5회씩 반복 측정하여 통제된 웜업 환경에서 계층형 캐시의 지연 단축 효과와 그 반복 측정 편차를 함께 확인한다. 또한 초기 기동(Cold Start) 구간에서 발생하는 꼬리 지연 증가 현상이 웜업 과정을 통해 안정화되는 수렴 특성을 정량적으로 분석한다.
@@ -99,7 +99,7 @@ Syed et al. [4]은 제로 트러스트 아키텍처에 관한 포괄적 조사 �
 
 SPIFFE(Secure Production Identity Framework for Everyone) [6]는 이기종 클라우드 환경에서 분산 워크로드 신원을 상호 운용 가능하도록 표준화한 CNCF 명세이다. SPIFFE ID는 `spiffe://<trust-domain>/ns/<namespace>/sa/<service-account>` 형식의 URI 스키마를 따르며, X.509 인증서의 SAN(Subject Alternative Name) 필드에 RFC 5280 [7]이 정의하는 URI 타입으로 인코딩된다.
 
-`aegis-mesh`는 별도의 데몬 의존성 없이도 X.509 SPIFFE SAN 인증서를 Netty SSL 엔진 단계에서 직접 파싱하여 서비스 신원을 추출하도록 설계되었다. 이를 통해 SPIFFE 표준 명세를 준수하면서도 인프로세스 신원 파이프라인을 경량화할 수 있다.
+`pop-mesh`는 별도의 데몬 의존성 없이도 X.509 SPIFFE SAN 인증서를 Netty SSL 엔진 단계에서 직접 파싱하여 서비스 신원을 추출하도록 설계되었다. 이를 통해 SPIFFE 표준 명세를 준수하면서도 인프로세스 신원 파이프라인을 경량화할 수 있다.
 
 ### 2.3 리액티브 스트림과 이벤트 루프 모델
 
@@ -113,9 +113,9 @@ Welsh et al. [8]이 제안한 SEDA(Staged Event-Driven Architecture)는 동시�
 
 ### 3.1 전체 파이프라인 구조
 
-`aegis-mesh`는 Spring Cloud Gateway 및 Netty 이벤트 루프 기반으로 구축되었다. 클라이언트의 인바운드 요청은 일련의 논블로킹 필터를 순차적으로 통과한다. 그림 1은 시스템의 전체 요청 처리 파이프라인과 필터 체인 구조를 나타낸다.
+`pop-mesh`는 Spring Cloud Gateway 및 Netty 이벤트 루프 기반으로 구축되었다. 클라이언트의 인바운드 요청은 일련의 논블로킹 필터를 순차적으로 통과한다. 그림 1은 시스템의 전체 요청 처리 파이프라인과 필터 체인 구조를 나타낸다.
 
-![그림 1. aegis-mesh 리액티브 요청 처리 파이프라인 구조](../IMG/IMG_1.png)
+![그림 1. pop-mesh 리액티브 요청 처리 파이프라인 구조](../IMG/IMG_1.png)
 
 ### 3.2 mTLS SPIFFE ID 파싱 및 이중 신원 합성
 
@@ -186,7 +186,7 @@ L1 캐시 미스 시 호출되는 L2 캐시는 Spring Data Redis Reactive를 기
 
 `DownstreamTokenMinter.mintInternalToken()`은 서명 키 상태가 미초기화된 경우 명시적 예외를 발생시켜 인가를 거부하도록 구현하였다. 이는 예외 상황에서 기본 허용(Fail-Open)이 아닌 기본 거부(Fail-Secure) 원칙을 코드 수준에서 관철한 설계이다.
 
-시스템의 내부 상태는 Micrometer 계측 인프라를 통해 실시간으로 노출된다. L1 캐시 적중/미스(`aegis.policy.cache.l1.hits/misses`), L2 Redis 조회 지연(`aegis.policy.cache.l2.latency`), 인증 거부 사유별 카운터(`aegis.security.auth.rejections`), 단일 비행 중복 제거 건수(`aegis.policy.singleflight.deduplicated`) 등의 지표가 Prometheus 엔드포인트 및 Server-Sent Events(SSE) 기반 실시간 스트림으로 제공된다. 이 관측성 인프라는 계층별 캐시 동작의 정량적 분리 측정을 지원하며, 본 논문의 소거 연구를 위한 계측 기반으로 활용되었다.
+시스템의 내부 상태는 Micrometer 계측 인프라를 통해 실시간으로 노출된다. L1 캐시 적중/미스(`pop.policy.cache.l1.hits/misses`), L2 Redis 조회 지연(`pop.policy.cache.l2.latency`), 인증 거부 사유별 카운터(`pop.security.auth.rejections`), 단일 비행 중복 제거 건수(`pop.policy.singleflight.deduplicated`) 등의 지표가 Prometheus 엔드포인트 및 Server-Sent Events(SSE) 기반 실시간 스트림으로 제공된다. 이 관측성 인프라는 계층별 캐시 동작의 정량적 분리 측정을 지원하며, 본 논문의 소거 연구를 위한 계측 기반으로 활용되었다.
 
 ---
 
@@ -274,7 +274,7 @@ L1 캐시 미스 시 호출되는 L2 캐시는 Spring Data Redis Reactive를 기
 
 ### 4.5 단일 비행 패턴 및 일관성 검증
 
-`PolicyEngineStampedeTest`를 통해 동일 키에 대한 100개의 동시 요청을 주입한 결과, 실제 L2 Redis 네트워크 호출은 정확히 1회만 발생하였으며 나머지 99개 요청은 첫 번째 비동기 스트림 결과를 공유받아 처리되었다. 이는 Micrometer 메트릭(`aegis.policy.singleflight.deduplicated = 99`)을 통해 정량적으로 확인되었다.
+`PolicyEngineStampedeTest`를 통해 동일 키에 대한 100개의 동시 요청을 주입한 결과, 실제 L2 Redis 네트워크 호출은 정확히 1회만 발생하였으며 나머지 99개 요청은 첫 번째 비동기 스트림 결과를 공유받아 처리되었다. 이는 Micrometer 메트릭(`pop.policy.singleflight.deduplicated = 99`)을 통해 정량적으로 확인되었다.
 
 아울러 Testcontainers를 이용한 `CacheCoherencyIntegrationTest`에서 Redis Pub/Sub을 통한 무효화 메시지 발행 시, 단일 인스턴스 루프백 네트워크 환경 기준으로 100 ms 이내에 로컬 L1 캐시 엔트리가 축출됨을 확인하였다. 이는 단일 노드 환경에서의 결과이며, 다중 레플리카 분산 환경에서의 전파 지연 및 일관성 보장 수준은 §5.2에서 논의한다.
 
@@ -316,7 +316,7 @@ L1 캐시 미스 시 호출되는 L2 캐시는 Spring Data Redis Reactive를 기
 
 ## VI. 결론
 
-본 논문은 제로 트러스트 보안 검증을 외부 사이드카나 원격 인가 서버에 전적으로 위임하지 않고, 게이트웨이 프로세스 내부에서 완결하도록 설계된 `aegis-mesh`의 구조와 성능 특성을 제시하였다.
+본 논문은 제로 트러스트 보안 검증을 외부 사이드카나 원격 인가 서버에 전적으로 위임하지 않고, 게이트웨이 프로세스 내부에서 완결하도록 설계된 `pop-mesh`의 구조와 성능 특성을 제시하였다.
 
 본 시스템은 mTLS SPIFFE 신원과 사용자 JWT를 Java 불변 레코드로 합성하여 Confused Deputy 취약점을 구조적으로 방어하였으며, W-TinyLFU 기반 L1 Caffeine 캐시와 리액티브 L2 Redis 캐시를 결합한 계층형 캐시 구조를 구성하였다. 아울러 동시 폭주 요청을 단일 I/O로 병합하는 단일 비행 패턴을 리액티브 스트림으로 구현하고 연산자 순서에 따른 메모리 안전성을 규명하였다.
 

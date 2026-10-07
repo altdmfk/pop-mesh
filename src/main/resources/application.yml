@@ -12,7 +12,7 @@ server:
 
 spring:
   application:
-    name: aegis-gateway
+    name: pop-gateway
   data:
     redis:
       host: localhost
@@ -30,7 +30,7 @@ spring:
 
 gateway:
   security:
-    secret-key: "${AEGIS_SECRET_KEY:YourSuperSecretKeyForHmacGenerationMakeItLongAndSecure}"
+    secret-key: "${POP_SECRET_KEY:YourSuperSecretKeyForHmacGenerationMakeItLongAndSecure}"
     # Comma-separated raw CompositePolicyKey strings (spiffeId:userId:resource:action)
     # that are allowed when Redis has no entry (static fallback allowlist).
     # Used for benchmark scenarios. In production, populate Redis via setPolicyDecision().
@@ -48,4 +48,4 @@ management:
         include: prometheus,health,info
   metrics:
     tags:
-      application: aegis-gateway
+      application: pop-gateway

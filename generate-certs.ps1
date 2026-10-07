@@ -5,7 +5,7 @@ $OUT_DIR = "src/main/resources/certs"
 New-Item -ItemType Directory -Force -Path $OUT_DIR | Out-Null
 
 # 1. Generate Root CA
-openssl req -x509 -newkey rsa:4096 -days 3650 -nodes -keyout "$OUT_DIR/ca.key" -out "$OUT_DIR/ca.crt" -subj "/CN=Aegis-Root-CA"
+openssl req -x509 -newkey rsa:4096 -days 3650 -nodes -keyout "$OUT_DIR/ca.key" -out "$OUT_DIR/ca.crt" -subj "/CN=PoP-Root-CA"
 
 # 2. Generate Gateway Server Certificate
 openssl req -newkey rsa:2048 -nodes -keyout "$OUT_DIR/server.key" -out "$OUT_DIR/server.csr" -subj "/CN=localhost"

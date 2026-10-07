@@ -1,4 +1,4 @@
-# Aegis-Mesh: High-Throughput Zero-Trust API Gateway
+# PoP-Mesh: High-Throughput Zero-Trust API Gateway
 
 > **Java 21 LTS · Spring Cloud Gateway (Netty) · Project Reactor · mTLS SPIFFE · Dual-Identity JWT · In-Process Hierarchical Caching**
 
@@ -8,14 +8,14 @@
 
 전통적인 서비스 메시(Service Mesh) 패턴은 **사이드카 프록시(Envoy) + 외부 정책 엔진(OPA)** 조합을 표준으로 채택합니다. 그러나 이 아키텍처는 두 가지 본질적 한계를 가집니다.
 
-| 문제 | Envoy + OPA 사이드카 | **Aegis-Mesh (In-Process)** |
+| 문제 | Envoy + OPA 사이드카 | **PoP-Mesh (In-Process)** |
 |---|---|---|
 | **인가 지연** | 모든 요청이 사이드카 → OPA 로 2개의 네트워크 홉 추가 (P99 수십ms) | In-Process L1/L2 캐시로 추가 네트워크 홉 **완전 제거** (P99 < 10ms) |
 | **메모리 모델** | JVM 힙 외부 C++ 프로세스 → GC 비결정적 중단 가능 | Netty Off-heap `DirectByteBuf` 풀링, Zero-Copy 소켓 전송 |
 | **Thread 모델** | 블로킹 HTTP/gRPC 클라이언트로 Thread 소진 위험 | 100% Reactive (Mono/Flux), BlockHound로 런타임 검증 |
 | **토큰 변환** | 다운스트림마다 비대칭 RSA/EC 검증 반복 | Edge에서 1회 검증 후 경량 HMAC(`X-Internal-Identity`) 재발급 |
 
-Aegis-Mesh는 **L7 리버스 프록시에서 Zero-Trust 보안 정책을 완전히 In-Process로 처리**하여, 사이드카 없이도 더 낮은 지연시간과 더 강한 보안 격리를 동시에 달성합니다.
+PoP-Mesh는 **L7 리버스 프록시에서 Zero-Trust 보안 정책을 완전히 In-Process로 처리**하여, 사이드카 없이도 더 낮은 지연시간과 더 강한 보안 격리를 동시에 달성합니다.
 
 ---
 
@@ -112,12 +112,12 @@ sequenceDiagram
 
 | 메트릭 | 의미 |
 |---|---|
-| `aegis.policy.cache.l1.hits` | L1 캐시 적중 카운터 |
-| `aegis.policy.cache.l1.misses` | L1 캐시 미스 카운터 |
-| `aegis.policy.cache.l2.latency` | Reactive Redis 순수 네트워크 지연 타이머 |
-| `aegis.policy.singleflight.deduplicated` | Single-Flight으로 병합된 동시 요청 수 |
-| `aegis.security.auth.rejections{reason}` | 거부 사유별 Counter |
-| `aegis.security.dual_identity.confused_deputy_blocks` | Confused Deputy 차단 카운터 |
+| `pop.policy.cache.l1.hits` | L1 캐시 적중 카운터 |
+| `pop.policy.cache.l1.misses` | L1 캐시 미스 카운터 |
+| `pop.policy.cache.l2.latency` | Reactive Redis 순수 네트워크 지연 타이머 |
+| `pop.policy.singleflight.deduplicated` | Single-Flight으로 병합된 동시 요청 수 |
+| `pop.security.auth.rejections{reason}` | 거부 사유별 Counter |
+| `pop.security.dual_identity.confused_deputy_blocks` | Confused Deputy 차단 카운터 |
 
 ---
 
