@@ -2,48 +2,62 @@ package com.pop.gateway.policy;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.pop.gateway.config.GatewayConstants;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.ReactiveSubscription;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.ReactiveRedisMessageListenerContainer;
 import org.springframework.stereotype.Service;
+import reactor.core.Disposable;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RevocationService {
 
     private final ReactiveRedisMessageListenerContainer listenerContainer;
-    
-    // Fast L1 negative-cache for revoked tokens/identities.
-    // Bloom filter can also be used, but Caffeine with short/medium TTL is effective for immediate revocation sync.
+    private Disposable subscription;
+
     private final Cache<String, Boolean> revokedCache = Caffeine.newBuilder()
-            .expireAfterWrite(Duration.ofHours(24)) // Keep revoked state long enough to overlap with standard token TTL
-            .maximumSize(100_000)
+            .expireAfterWrite(GatewayConstants.REVOCATION_CACHE_TTL)
+            .maximumSize(GatewayConstants.REVOCATION_CACHE_MAX_SIZE)
             .build();
 
     @PostConstruct
     public void init() {
-        listenerContainer.receive(ChannelTopic.of("token:revocation"))
+        this.subscription = listenerContainer.receive(ChannelTopic.of(GatewayConstants.CHANNEL_TOKEN_REVOCATION))
                 .map(ReactiveSubscription.Message::getMessage)
                 .doOnNext(revokedId -> {
-                    if (revokedId != null) {
+                    if (revokedId != null && !revokedId.isBlank()) {
                         revokedCache.put(revokedId, Boolean.TRUE);
                     }
                 })
-                .doOnError(e -> org.slf4j.LoggerFactory.getLogger(RevocationService.class).warn("Redis connection dropped, preparing to reconnect..."))
-                .retryWhen(reactor.util.retry.Retry.backoff(Long.MAX_VALUE, java.time.Duration.ofSeconds(1)).maxBackoff(java.time.Duration.ofSeconds(30)))
+                .doOnError(e -> log.warn("Redis connection dropped for revocation channel, preparing to reconnect: {}", e.getMessage()))
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(1)).maxBackoff(Duration.ofSeconds(30)))
                 .subscribe(
-                        null,
-                        error -> org.slf4j.LoggerFactory.getLogger(RevocationService.class).error("Revocation subscription died permanently", error),
-                        () -> org.slf4j.LoggerFactory.getLogger(RevocationService.class).warn("Revocation subscription completed unexpectedly")
+                        msg -> {},
+                        error -> log.error("Revocation subscription terminated permanently", error),
+                        () -> log.warn("Revocation subscription completed unexpectedly")
                 );
     }
 
     public boolean isRevoked(String id) {
-        if (id == null) return false;
+        if (id == null || id.isBlank()) {
+            return false;
+        }
         return revokedCache.getIfPresent(id) != null;
+    }
+
+    @PreDestroy
+    public void destroy() {
+        if (subscription != null && !subscription.isDisposed()) {
+            subscription.dispose();
+        }
     }
 }
