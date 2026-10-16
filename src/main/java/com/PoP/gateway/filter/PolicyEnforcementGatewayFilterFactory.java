@@ -1,5 +1,6 @@
 package com.pop.gateway.filter;
 
+import com.pop.gateway.config.GatewayConstants;
 import com.pop.gateway.model.CompositePolicyKey;
 import com.pop.gateway.model.SecurityContextExchange;
 import com.pop.gateway.model.SpiffeIdentity;
@@ -16,7 +17,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @Component
@@ -27,7 +27,10 @@ public class PolicyEnforcementGatewayFilterFactory extends AbstractGatewayFilter
     private final RevocationService revocationService;
     private final MeterRegistry meterRegistry;
 
-    public PolicyEnforcementGatewayFilterFactory(PolicyEngine policyEngine, DownstreamTokenMinter tokenMinter, RevocationService revocationService, MeterRegistry meterRegistry) {
+    public PolicyEnforcementGatewayFilterFactory(PolicyEngine policyEngine,
+                                                 DownstreamTokenMinter tokenMinter,
+                                                 RevocationService revocationService,
+                                                 MeterRegistry meterRegistry) {
         super(Config.class);
         this.policyEngine = policyEngine;
         this.tokenMinter = tokenMinter;
@@ -38,34 +41,26 @@ public class PolicyEnforcementGatewayFilterFactory extends AbstractGatewayFilter
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
-            SecurityContextExchange context = exchange.getAttribute(ContextExtractionGatewayFilterFactory.CONTEXT_KEY);
-            
+            SecurityContextExchange context = exchange.getAttribute(GatewayConstants.CONTEXT_KEY);
             if (context == null) {
                 return ErrorResponseUtil.writeProblemResponse(exchange, HttpStatus.INTERNAL_SERVER_ERROR, "Security Context Not Found");
             }
 
-            final String spiffeId;
-            if (context.serviceIdentity() instanceof SpiffeIdentity(var id, var ns, var sa)) {
-                spiffeId = id;
-            } else if (context.serviceIdentity() == null) {
-                return Mono.error(new IllegalStateException("Service Identity missing"));
-            } else {
-                return Mono.error(new IllegalStateException("Unexpected identity type: " + context.serviceIdentity().getClass()));
+            if (!(context.serviceIdentity() instanceof SpiffeIdentity spiffe)) {
+                return Mono.error(new IllegalStateException(
+                        context.serviceIdentity() == null ? "Service Identity missing" : "Unexpected identity type: " + context.serviceIdentity().getClass()));
             }
+            String spiffeId = spiffe.spiffeId();
 
-            final String userId;
-            final String jti;
-            if (context.userIdentity() instanceof UserTokenIdentity(var sub, var j, var roles)) {
-                userId = sub;
-                jti = j;
-            } else if (context.userIdentity() == null) {
-                return Mono.error(new IllegalStateException("User Identity missing"));
-            } else {
-                return Mono.error(new IllegalStateException("Unexpected user identity type: " + context.userIdentity().getClass()));
+            if (!(context.userIdentity() instanceof UserTokenIdentity user)) {
+                return Mono.error(new IllegalStateException(
+                        context.userIdentity() == null ? "User Identity missing" : "Unexpected user identity type: " + context.userIdentity().getClass()));
             }
+            String userId = user.subject();
+            String jti = user.jti();
 
             if (revocationService.isRevoked(spiffeId) || (jti != null && revocationService.isRevoked(jti))) {
-                meterRegistry.counter("pop.security.auth.rejections", "reason", "revoked").increment();
+                meterRegistry.counter(GatewayConstants.METRIC_AUTH_REJECTIONS, "reason", "revoked").increment();
                 return ErrorResponseUtil.writeProblemResponse(exchange, HttpStatus.UNAUTHORIZED, "Identity or Token has been revoked");
             }
 
@@ -80,19 +75,19 @@ public class PolicyEnforcementGatewayFilterFactory extends AbstractGatewayFilter
                     .flatMap(decision -> {
                         if (decision == PolicyDecision.ALLOW) {
                             return tokenMinter.mintInternalToken(spiffeId, userId)
-                                .flatMap(internalToken -> {
-                                    ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                                            .headers(headers -> headers.remove(HttpHeaders.AUTHORIZATION))
-                                            .header("X-Internal-Identity", internalToken)
-                                            .build();
-                                    
-                                    return chain.filter(exchange.mutate().request(mutatedRequest).build());
-                                });
-                        } else {
-                            meterRegistry.counter("pop.security.auth.rejections", "reason", "policy_deny").increment();
-                            meterRegistry.counter("pop.security.dual_identity.confused_deputy_blocks").increment();
-                            return ErrorResponseUtil.writeProblemResponse(exchange, HttpStatus.FORBIDDEN, "Access Denied by Policy");
+                                    .flatMap(internalToken -> {
+                                        ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+                                                .headers(headers -> headers.remove(HttpHeaders.AUTHORIZATION))
+                                                .header(GatewayConstants.HEADER_INTERNAL_IDENTITY, internalToken)
+                                                .build();
+
+                                        return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                                    });
                         }
+
+                        meterRegistry.counter(GatewayConstants.METRIC_AUTH_REJECTIONS, "reason", "policy_deny").increment();
+                        meterRegistry.counter(GatewayConstants.METRIC_CONFUSED_DEPUTY_BLOCKS).increment();
+                        return ErrorResponseUtil.writeProblemResponse(exchange, HttpStatus.FORBIDDEN, "Access Denied by Policy");
                     });
         };
     }
