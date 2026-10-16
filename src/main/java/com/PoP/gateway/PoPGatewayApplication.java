@@ -6,7 +6,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.embedded.netty.NettyServerCustomizer;
 import org.springframework.context.annotation.Bean;
 
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class PoPGatewayApplication {
 
     public static void main(String[] args) {
