@@ -1,6 +1,8 @@
 package com.pop.gateway.actuator;
 
+import com.pop.gateway.config.GatewayConstants;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,46 +15,47 @@ import java.time.format.DateTimeFormatter;
 @RestController
 public class DashboardSseController {
 
+    private static final Duration STREAM_INTERVAL = Duration.ofSeconds(1);
+    private static final String EVENT_NAME = "metric-update";
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
+
     private final MeterRegistry registry;
 
     public DashboardSseController(MeterRegistry registry) {
         this.registry = registry;
     }
 
-    // 1초 주기로 시스템 메트릭을 클라이언트에 스트리밍
     @GetMapping(value = "/actuator/metrics-stream", produces = "text/event-stream")
     public Flux<ServerSentEvent<MetricDto>> streamMetrics() {
-        return Flux.interval(Duration.ofSeconds(1))
+        return Flux.interval(STREAM_INTERVAL)
                 .map(sequence -> ServerSentEvent.<MetricDto>builder()
                         .id(String.valueOf(sequence))
-                        .event("metric-update")
+                        .event(EVENT_NAME)
                         .data(gatherCurrentMetrics())
                         .build());
     }
 
-    // Micrometer 레지스트리에서 현재 성능 지표 스냅샷 추출
     private MetricDto gatherCurrentMetrics() {
         double incoming = 0;
         try {
             incoming = registry.find("http.server.requests").timers().stream()
-                    .mapToDouble(io.micrometer.core.instrument.Timer::count)
+                    .mapToDouble(Timer::count)
                     .sum();
-        } catch (Exception e) {
-            // timer may not exist initially
+        } catch (Exception ignored) {
         }
-        
-        double coalesced = registry.counter("pop.policy.singleflight.deduplicated").count();
+
+        double coalesced = registry.counter(GatewayConstants.METRIC_SINGLEFLIGHT_DEDUPLICATED).count();
         double upstream = Math.max(1, incoming - coalesced);
-        
+        double efficiency = incoming > 0 ? (coalesced / incoming) * 100.0 : 100.0;
+
         return new MetricDto(
-            LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")),
-            (int) incoming,
-            (int) upstream,
-            (incoming > 0) ? ((coalesced / incoming) * 100.0) : 100.0,
-            (long) coalesced
+                LocalTime.now().format(TIME_FORMATTER),
+                (int) incoming,
+                (int) upstream,
+                efficiency,
+                (long) coalesced
         );
     }
 
-    // DTO 레코드 (Java 16+)
     public record MetricDto(String time, int incomingRps, int upstreamRps, double efficiency, long coalescedCount) {}
 }
